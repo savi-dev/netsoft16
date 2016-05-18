@@ -1,0 +1,144 @@
+heat_template_version: 2014-10-16
+
+description: >
+  An example of multi-region heat deployment where the DB and
+  the server are located on different regions.
+
+parameters:
+
+  key_name:
+    type: string
+    description : Name of a KeyPair to enable SSH access to the instance
+
+  instance_type:
+    type: string
+    description: Instance type for web and DB servers
+    default: m1.small
+    constraints:
+      - allowed_values: [m1.tiny, m1.small, m1.medium, m1.large, m1.xlarge]
+        description: instance_type must be a valid instance type
+
+  db_name:
+    type: string
+    description: WordPress database name
+    default: wordpress
+    constraints:
+      - length: { min: 1, max: 64 }
+        description: db_name must be between 1 and 64 characters
+      - allowed_pattern: '[a-zA-Z][a-zA-Z0-9]*'
+        description: >
+          db_name must begin with a letter and contain only alphanumeric
+          characters
+
+  db_username:
+    type: string
+    description: The WordPress database admin account username
+    default: admin
+    hidden: true
+    constraints:
+      - length: { min: 1, max: 16 }
+        description: db_username must be between 1 and 16 characters
+      - allowed_pattern: '[a-zA-Z][a-zA-Z0-9]*'
+        description: >
+          db_username must begin with a letter and contain only alphanumeric
+          characters
+
+  db_password:
+    type: string
+    description: The WordPress database admin account password
+    default: admin
+    hidden: true
+    constraints:
+      - length: { min: 1, max: 41 }
+        description: db_password must be between 1 and 41 characters
+      - allowed_pattern: '[a-zA-Z0-9]*'
+        description: db_password must contain only alphanumeric characters
+
+  db_ipaddr:
+    type: string
+    description: IP address of the DB 
+
+resources:
+  WebServerSecurityGroup:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      name: web_server_sec
+      description: Security group that allows Ping, SSH, and HTTP
+      rules:
+      - protocol: icmp
+      - protocol: tcp
+        port_range_min: 22
+        port_range_max: 22
+      - protocol: tcp
+        port_range_min: 80
+        port_range_max: 80
+  WebServer:
+    type: OS::Nova::Server
+    properties:
+      image: Ubuntu64-wp
+      flavor: { get_param: instance_type }
+      key_name: { get_param: key_name }
+      security_groups:
+        - {get_resource: WebServerSecurityGroup}
+        - default
+      user_data:
+        str_replace:
+          template: |
+            #!/bin/bash
+
+            rm -rf /var/www
+            ln -s /usr/share/wordpress /var/www
+            chown -R www-data /usr/share/wordpress
+
+            touch /etc/apache2/conf.d/wordpress
+            cat <<EOF > /etc/apache2/conf.d/wordpress
+            Alias /wordpress /usr/share/wordpress
+
+            <Directory /usr/share/wordpress>
+            ##  AllowOverride Options
+              AllowOverride All
+              <IfModule mod_authz_core.c>
+                # Apache 2.4
+                Require local
+                Require ip 10.10.10
+              </IfModule>
+              <IfModule !mod_authz_core.c>
+                # Apache 2.2
+                Order Deny,Allow
+                Deny from All
+                Allow from 127.0.0.1
+                Allow from ::1
+             </IfModule>
+            </Directory>
+
+
+            <Directory /usr/share/wordpress/wp-content/plugins/akismet>
+              <FilesMatch "\.(php|txt)$">
+                Order Deny,Allow
+                Deny from all
+              </FilesMatch>
+            </Directory>
+            EOF
+            sed -i "/Deny from All/d" /etc/apache2/conf.d/wordpress
+            sed -i "s/Require local/Require all granted/" /etc/apache2/conf.d/wordpress
+
+            rm /etc/wordpress/wp-config.php
+            wget http://core.svn.wordpress.org/trunk/wp-config-sample.php -P /etc/wordpress/
+            mv /etc/wordpress/wp-config-sample.php /etc/wordpress/wp-config.php
+            sed -i s/database_name_here/db_name/ /etc/wordpress/wp-config.php
+            sed -i s/username_here/db_user/      /etc/wordpress/wp-config.php
+            sed -i s/password_here/db_password/  /etc/wordpress/wp-config.php
+            sed -i s/localhost/db_ipaddr/        /etc/wordpress/wp-config.php
+
+            service apache2 restart
+          params:
+            db_name: { get_param: db_name }
+            db_user: { get_param: db_username }
+            db_password: { get_param: db_password }
+            db_ipaddr: { get_param: db_ipaddr }
+
+outputs:
+  PublicIp:
+    description: Public IP address of Web server
+    value: { get_attr: [ WebServer, first_address ] }
+
