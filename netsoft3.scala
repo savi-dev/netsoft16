@@ -23,27 +23,27 @@ object netsoft {
     val currTime = DateTime.now.toString("YYYY_MM_dd_HH_mm_ss")
     
     //Getting the VMs CPU utilization
-    val ridToId = Utils.getVMRidToID(sqlContext)
-    val vmridAvgCPU = VmCPUUtil.calculateAvgFromFile(sqlContext, hdfsPathsArray, startTime, endTime)
-    val vmidAvgCPU = vmridAvgCPU.join(ridToId).map(r => (r._2._2, (r._1, r._2._1, "vm")))
+    val ridToId = Utils.getVMRidToID(sqlContext) //produces (VMUUID,RID)
+    val vmridAvgCPU = VmCPUUtil.calculateAvgFromFile(sqlContext, hdfsPathsArray, startTime, endTime) //produces(VMUUID,CPU utilization)
+   
     //Getting the VM communication Links based on Mac addresses
-    val commPairBwutil = OFFlowBw.calculateAvgPerCommPairFromFile(sqlContext, hdfsPathsArray, startTime, endTime)
-    val macToVmrid = Utils.getMacToVMRid(sqlContext)
+    val commPairBwutil = OFFlowBw.calculateAvgPerCommPairFromFile(sqlContext, hdfsPathsArray, startTime, endTime) //produces (Source MAC, destination MAC, (discrete_time, average bandwidth), resource_id)
+    val macToVmrid = Utils.getMacToVMRid(sqlContext)//Mapping between Mac Address and UUID
     //Filtering the flows to match the input VMid flows
-    val macToVmrid_filtered = macToVmrid.filter(v =>v._2==vmid)
-    val vm_mac= macToVmrid_filtered.map(x =>x._1).collect()(0)
+    val macToVmrid_filtered = macToVmrid.filter(v =>v._2==vmid)//Gets the corresponding Mac for the input VM ID
+    val vm_mac= macToVmrid_filtered.map(x =>x._1).collect()(0)//Converts the Mac in RDD to Mac in string format
 
     //Mapping the VM mac address to VM UUID
-    val ridToMacId = macToVmrid_filtered.map(mr => (mr._2, mr._1)).join(ridToId)
-    val macToId = ridToMacId.map(rmi => rmi._2)
-    val convertedSrcMac:RDD[(String, ((String, Double), Option[Long]))] = commPairBwutil.map(p => (p._1, (p._2, p._3))).leftOuterJoin(macToId)
+    val ridToMacId = macToVmrid_filtered.map(mr => (mr._2, mr._1)).join(ridToId) // (rid, (mac, RID))
+    val macToId = ridToMacId.map(rmi => rmi._2) // (mac,RID)
+    val convertedSrcMac:RDD[(String, ((String, Double), Option[Long]))] = commPairBwutil.map(p => (p._1, (p._2, p._3))).leftOuterJoin(macToId) // // produce (source Mac, ((des MAC, (discrete_time, average bandwidth)), srcVMid))
     //Getting the VMs connected to the input VM based on Mac addresses
-    val convertedSrcMac_srcfiltered=convertedSrcMac.filter(v => v._1 == vm_mac || v._2._1._1 == vm_mac)
+    val convertedSrcMac_srcfiltered=convertedSrcMac.filter(v => v._1 == vm_mac || v._2._1._1 == vm_mac) 
     
     //Producing the Graph edges as source VM UUID and target VM UUID
     val mactomac= convertedSrcMac_srcfiltered.map(f => (f._1, f._2._1._1)).join(macToVmrid)
     val mactomac2= mactomac.map(f => f._2).join(macToVmrid)
-    val vmidtovmid =  mactomac2.map(f => f._2)
+    val vmidtovmid =  mactomac2.map(f => f._2) //produces Source VMID to Destination VMID
     val edges= vmidtovmid.map(x => (x._1,x._2))
 	
 	//Mapping the VM UUID to VM name
