@@ -44,23 +44,22 @@ object netsoft {
     val mactomac= convertedSrcMac_srcfiltered.map(f => (f._1, f._2._1._1)).join(macToVmrid)
     val mactomac2= mactomac.map(f => f._2).join(macToVmrid)
     val vmidtovmid =  mactomac2.map(f => f._2) //produces Source VMID to Destination VMID
-    val edges= vmidtovmid.map(x => (x._1,x._2))
+    val edges= vmidtovmid.map(x => (x._1,x._2)) 
 	
 	//Mapping the VM UUID to VM name
-    val vmInfo = Utils.getVMuuidInfo(sqlContext).map(x => (x._1,x._4))
+    val vmInfo = Utils.getVMuuidInfo(sqlContext).map(x => (x._1,x._4)) //produces all VMIDs with their names (VMID,VM name)
     val vmInfo2 = vmidtovmid.join(vmInfo)
-    val src_name = vmInfo2.map(x =>(x._1,x._2._2))
+    val src_name = vmInfo2.map(x =>(x._1,x._2._2)) // produce input VMID and connected VMs to it as sources and names (VMID,name)
     val vmInfo3 = vmidtovmid.join(vmInfo)
-    val dst_name = vmInfo3.map(x=>x._2).join(vmInfo).map(x=> (x._1,x._2._2))
+    val dst_name = vmInfo3.map(x=>x._2).join(vmInfo).map(x=> (x._1,x._2._2)) // produce input VMID and connected VMs to it as destinations and names (VMID,name)
 
     //Mapping the VM UUID to user ID
-    val nodes_userid = Utils.getVMuuidInfo(sqlContext).map(x => (x._3,x._1))
-    val nodes_username=Utils.getVMuuidInfo(sqlContext).map(x => (x._1,x._3))
+    val nodes_id=Utils.getVMuuidInfo(sqlContext).map(x => (x._1,x._3)) produces all VMs UUIds and their corresponding User ID
     val nodes = src_name.union(dst_name).distinct()
-    val nodes_name_cpu_user = nodes.join(vmridAvgCPU).join(nodes_username)
+    val nodes_name_cpu_user = nodes.join(vmridAvgCPU).join(nodes_id) // produces (VMID,((VM Name,CPU utilization),User ID))
     
     //Producing the Graph nodes as VMID, VM name, CPU utilization and User ID
-    val nodes_formatted= nodes_name_cpu_user.map(x=> (x._1,x._2._1._1,x._2._1._2,x._2._2))
+    val nodes_formatted= nodes_name_cpu_user.map(x=> (x._1,x._2._1._1,x._2._1._2,x._2._2)) //produces (VMID,VM Name,CPU utilization,User ID)
 
     //Converting Graph from RDD format to JSON
     import org.json4s.native.JsonMethods._
