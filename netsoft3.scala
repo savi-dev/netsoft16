@@ -46,12 +46,12 @@ object netsoft {
     val vmidtovmid =  mactomac2.map(f => f._2) //produces Source VMID to Destination VMID
     val edges= vmidtovmid.map(x => (x._1,x._2)) 
 	
-	//Mapping the VM UUID to VM name
+    //Mapping the VM UUID to VM name
     val vmInfo = Utils.getVMuuidInfo(sqlContext).map(x => (x._1,x._4)) //produces all VMIDs with their names (VMID,VM name)
     val vmInfo2 = vmidtovmid.join(vmInfo)
-    val src_name = vmInfo2.map(x =>(x._1,x._2._2)) // produce input VMID and connected VMs to it as sources and names (VMID,name)
+    val src_name = vmInfo2.map(x =>(x._1,x._2._2)) // produce input VMID and connected VMs to it as sources and names (VMID,VM name)
     val vmInfo3 = vmidtovmid.join(vmInfo)
-    val dst_name = vmInfo3.map(x=>x._2).join(vmInfo).map(x=> (x._1,x._2._2)) // produce input VMID and connected VMs to it as destinations and names (VMID,name)
+    val dst_name = vmInfo3.map(x=>x._2).join(vmInfo).map(x=> (x._1,x._2._2)) // produce input VMID and connected VMs to it as destinations and names (VMID,VM name)
 
     //Mapping the VM UUID to user ID
     val nodes_id=Utils.getVMuuidInfo(sqlContext).map(x => (x._1,x._3)) produces all VMs UUIds and their corresponding User ID
