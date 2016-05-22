@@ -20,13 +20,13 @@ object netsoft {
     val sqlContext = new org.apache.spark.sql.SQLContext(sc)
     import sqlContext.implicits._
     val currTime = DateTime.now.toString("YYYY_MM_dd_HH_mm_ss")
-    
+    //Generating the HDFS Paths where the Data is. We generate the paths of the data of the past 2 hours
     val hdfs1= DateTime.now.toString("YYYY/M/dd/HH")
     val hdfs2= DateTime.now.minusHours(1).toString("YYYY/M/dd/HH")
     val hdfs3= DateTime.now.minusHours(2).toString("YYYY/M/dd/HH")
     val hdfspaths = "hdfs://monarch-master/user/ubuntu/monitoring/parquet/METER_NAME_HERE/"+hdfs1+"/*,hdfs://monarch-master/user/ubuntu/monitoring/parquet/METER_NAME_HERE/"+hdfs2+"/*,hdfs://monarch-master/user/ubuntu/monitoring/parquet/METER_NAME_HERE/"+hdfs3+"/*"
-
-    val hdfsPathsArray = hdfspaths.split(",")
+    val hdfsPathsArray = hdfspaths.split(",") 
+    //Setting the Start time as 2 hours ago and End time is now  
     val startTime = DateTime.now.minusHours(2).toString("YYYY-MM-dd HH:mm:ss")
     val endTime = DateTime.now.toString("YYYY-MM-dd HH:mm:ss")
 
