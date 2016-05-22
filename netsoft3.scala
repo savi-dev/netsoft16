@@ -11,7 +11,7 @@ import com.github.nscala_time.time.Imports._
  */
 object netsoft {
 
-  def createGraph(hdfspaths:String, startTime:String, endTime:String, vmid:String): Unit ={
+  def createGraph(vmid:String): Unit ={
     //Some commands to initialize the Spark Job
     val sparkConf = new SparkConf()
       .setAppName(vmid)
@@ -19,8 +19,17 @@ object netsoft {
     sc.addJar("/home/ubuntu/mysql-connector-java-5.1.37/mysql-connector-java-5.1.37-bin.jar")
     val sqlContext = new org.apache.spark.sql.SQLContext(sc)
     import sqlContext.implicits._
-    val hdfsPathsArray = hdfspaths.split(",")
     val currTime = DateTime.now.toString("YYYY_MM_dd_HH_mm_ss")
+    
+    val hdfs1= DateTime.now.toString("YYYY/M/dd/HH")
+    val hdfs2= DateTime.now.minusHours(1).toString("YYYY/M/dd/HH")
+    val hdfs3= DateTime.now.minusHours(2).toString("YYYY/M/dd/HH")
+    val hdfspaths = "hdfs://monarch-master/user/ubuntu/monitoring/parquet/METER_NAME_HERE/"+hdfs1+"/*,hdfs://monarch-master/user/ubuntu/monitoring/parquet/METER_NAME_HERE/"+hdfs2+"/*,hdfs://monarch-master/user/ubuntu/monitoring/parquet/METER_NAME_HERE/"+hdfs3+"/*"
+
+    val hdfsPathsArray = hdfspaths.split(",")
+    val startTime = DateTime.now.minusHours(2).toString("YYYY-MM-dd HH:mm:ss")
+    val endTime = DateTime.now.toString("YYYY-MM-dd HH:mm:ss")
+
     
     //Getting the VMs CPU utilization
     val ridToId = Utils.getVMRidToID(sqlContext) //produces (VMUUID,RID)
@@ -43,8 +52,8 @@ object netsoft {
     //Producing the Graph edges as source VM UUID and target VM UUID
     val mactomac= convertedSrcMac_srcfiltered.map(f => (f._1, f._2._1._1)).join(macToVmrid)
     val mactomac2= mactomac.map(f => f._2).join(macToVmrid)
-    val vmidtovmid =  mactomac2.map(f => f._2) //produces Source VMID to Destination VMID
-    val edges= vmidtovmid.map(x => (x._1,x._2)) 
+    val vmidtovmid =  mactomac2.map(f => f._2) //produces Source VMID to Destination VMID 
+    val edges =vmidtovmid // stores the edges pattern of the graph
 	
     //Mapping the VM UUID to VM name
     val vmInfo = Utils.getVMuuidInfo(sqlContext).map(x => (x._1,x._4)) //produces all VMIDs with their names (VMID,VM name)
@@ -88,7 +97,6 @@ object netsoft {
     import java.io.PrintWriter
     import scala.io.Source
     val file_path =  "/home/ubuntu/"
-
     val writer = new PrintWriter(new File(file_path,vmid+"_"+currTime+".txt"))
     writer.write(graph_string2)
     writer.close()
@@ -99,10 +107,7 @@ object netsoft {
   def main(args: Array[String]) {
     Class.forName("com.mysql.jdbc.Driver")
 
-    val hdfspaths = args(0)
-    val startTime = args(1)
-    val endTime = args(2)
-    val vmid = args(3)
-    createGraph(hdfspaths, startTime, endTime, vmid)
+    val vmid = args(0)
+    createGraph(vmid)
   }
 }
