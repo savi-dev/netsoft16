@@ -54,7 +54,7 @@ object netsoft {
     val dst_name = vmInfo3.map(x=>x._2).join(vmInfo).map(x=> (x._1,x._2._2)) // produce input VMID and connected VMs to it as destinations and names (VMID,VM name)
 
     //Mapping the VM UUID to user ID
-    val nodes_id=Utils.getVMuuidInfo(sqlContext).map(x => (x._1,x._3)) produces all VMs UUIds and their corresponding User ID
+    val nodes_id=Utils.getVMuuidInfo(sqlContext).map(x => (x._1,x._3)) //produces all VMs UUIds and their corresponding User ID
     val nodes = src_name.union(dst_name).distinct()
     val nodes_name_cpu_user = nodes.join(vmridAvgCPU).join(nodes_id) // produces (VMID,((VM Name,CPU utilization),User ID))
     
