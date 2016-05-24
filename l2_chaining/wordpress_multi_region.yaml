@@ -1,0 +1,116 @@
+heat_template_version: 2014-10-16
+
+description: >
+  Multi region version of heat template.
+
+parameters:
+  key_name:
+    type: string
+    description : Name of a KeyPair to enable SSH access to the instance
+
+  instance_type:
+    type: string
+    description: Instance type for web and DB servers
+    default: m1.small
+    constraints:
+      - allowed_values: [m1.tiny, m1.small, m1.medium, m1.large, m1.xlarge]
+        description: instance_type must be a valid instance type
+
+  db_name:
+    type: string
+    description: WordPress database name
+    default: mysqldb
+    constraints:
+      - length: { min: 1, max: 64 }
+        description: db_name must be between 1 and 64 characters
+      - allowed_pattern: '[a-zA-Z][a-zA-Z0-9]*'
+        description: >
+          db_name must begin with a letter and contain only alphanumeric
+          characters
+
+  db_username:
+    type: string
+    description: The WordPress database admin account username
+    default: admin
+    hidden: true
+    constraints:
+      - length: { min: 1, max: 16 }
+        description: db_username must be between 1 and 16 characters
+      - allowed_pattern: '[a-zA-Z][a-zA-Z0-9]*'
+        description: >
+          db_username must begin with a letter and contain only alphanumeric
+          characters
+
+  db_password:
+    type: string
+    description: The WordPress database admin account password
+    default: admin
+    hidden: true
+    constraints:
+      - length: { min: 1, max: 41 }
+        description: db_password must be between 1 and 41 characters
+      - allowed_pattern: '[a-zA-Z0-9]*'
+        description: db_password must contain only alphanumeric characters
+
+  db_root_password:
+    type: string
+    description: Root password for MySQL
+    default: admin
+    hidden: true
+    constraints:
+      - length: { min: 1, max: 41 }
+        description: db_root_password must be between 1 and 41 characters
+      - allowed_pattern: '[a-zA-Z0-9]*'
+        description: db_root_password must contain only alphanumeric characters
+
+  region1:
+    type: string
+    description: Name of first region (DB)
+    default: EDGE-CG-1
+
+  region2:
+    type: string
+    description: Name of second region (Web server)
+    default: EDGE-MG-1
+
+resources:
+  DBServerStack:
+    type: OS::Heat::Stack
+    properties:
+      context:
+        region_name: { get_param: region2} 
+      template: { get_file: db_server.yaml }
+      timeout: 60
+      parameters:
+        key_name: { get_param: key_name }
+        instance_type: { get_param: instance_type }
+        db_name: { get_param: db_name }
+        db_username: { get_param: db_username}
+        db_password: { get_param: db_password }
+        db_root_password: { get_param: db_root_password }
+  WebServerStack:
+    type: OS::Heat::Stack
+    properties:
+      context:
+        region_name: { get_param: region1}
+      template: { get_file: web_server_firewall.yaml }
+      timeout: 60
+      parameters:
+        key_name: { get_param: key_name }
+        instance_type: { get_param: instance_type }
+        db_name: { get_param: db_name }
+        db_username: { get_param: db_username}
+        db_password: { get_param: db_password }
+        db_ipaddr: { get_attr: [DBServerStack, outputs, DB_IP] }
+        
+outputs:
+  WebsiteURL:
+    description: URL for Wordpress wiki
+    value:
+      str_replace:
+        template: http://host
+        params:
+          host: { get_attr: [WebServerStack, outputs, WebServ_IP] }
+  DatabaseIP:
+    description: IP address of backend database
+    value: { get_attr: [DBServerStack, outputs, DB_IP] }
