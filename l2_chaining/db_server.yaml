@@ -159,7 +159,7 @@ resources:
             db_password: { get_param: db_password }
 
 outputs:
-  PublicIp:
+  DB_IP:
     description: Public IP address of DB server
     value: { get_attr: [ DBServer, first_address ] }
 

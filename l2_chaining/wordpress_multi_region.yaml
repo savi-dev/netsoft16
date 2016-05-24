@@ -93,7 +93,7 @@ resources:
     properties:
       context:
         region_name: { get_param: region1}
-      template: { get_file: web_server.yaml }
+      template: { get_file: web_server_firewall.yaml }
       timeout: 60
       parameters:
         key_name: { get_param: key_name }
@@ -101,7 +101,7 @@ resources:
         db_name: { get_param: db_name }
         db_username: { get_param: db_username}
         db_password: { get_param: db_password }
-        db_ipaddr: { get_attr: [DBServerStack, outputs, PublicIp] }
+        db_ipaddr: { get_attr: [DBServerStack, outputs, DB_IP] }
         
 outputs:
   WebsiteURL:
@@ -110,5 +110,7 @@ outputs:
       str_replace:
         template: http://host
         params:
-          host: { get_attr: [WebServerStack, outputs, PublicIp] }
-
+          host: { get_attr: [WebServerStack, outputs, WebServ_IP] }
+  DatabaseIP:
+    description: IP address of backend database
+    value: { get_attr: [DBServerStack, outputs, DB_IP] }
