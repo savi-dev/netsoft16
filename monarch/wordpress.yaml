@@ -1,0 +1,240 @@
+heat_template_version: 2013-05-23
+
+description: >
+  An example Heat Orchestration Template (HOT).
+  WordPress is web software you can use to create a beautiful website
+  or blog. This template installs two instances: one running a
+  WordPress deployment and the other using a local MySQL database to
+  store the data.
+
+parameters:
+
+  key_name:
+    type: string
+    description : Name of a KeyPair to enable SSH access to the instance
+
+  instance_type:
+    type: string
+    description: Instance type for web and DB servers
+    default: m1.small
+    constraints:
+      - allowed_values: [m1.tiny, m1.small, m1.medium, m1.large, m1.xlarge]
+        description: instance_type must be a valid instance type
+
+  db_name:
+    type: string
+    description: WordPress database name
+    default: wordpress
+    constraints:
+      - length: { min: 1, max: 64 }
+        description: db_name must be between 1 and 64 characters
+      - allowed_pattern: '[a-zA-Z][a-zA-Z0-9]*'
+        description: >
+          db_name must begin with a letter and contain only alphanumeric
+          characters
+
+  db_username:
+    type: string
+    description: The WordPress database admin account username
+    default: admin
+    hidden: true
+    constraints:
+      - length: { min: 1, max: 16 }
+        description: db_username must be between 1 and 16 characters
+      - allowed_pattern: '[a-zA-Z][a-zA-Z0-9]*'
+        description: >
+          db_username must begin with a letter and contain only alphanumeric
+          characters
+
+  db_password:
+    type: string
+    description: The WordPress database admin account password
+    default: admin
+    hidden: true
+    constraints:
+      - length: { min: 1, max: 41 }
+        description: db_password must be between 1 and 41 characters
+      - allowed_pattern: '[a-zA-Z0-9]*'
+        description: db_password must contain only alphanumeric characters
+
+  db_root_password:
+    type: string
+    description: Root password for MySQL
+    default: admin
+    hidden: true
+    constraints:
+      - length: { min: 1, max: 41 }
+        description: db_root_password must be between 1 and 41 characters
+      - allowed_pattern: '[a-zA-Z0-9]*'
+        description: db_root_password must contain only alphanumeric characters
+
+
+resources:
+  SecurityGroup:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      name: web_server_sec
+      description: Security group that allows Ping, SSH, and HTTP
+      rules:
+      - protocol: icmp
+      - protocol: tcp
+        port_range_min: 22
+        port_range_max: 22
+      - protocol: tcp
+        port_range_min: 80
+        port_range_max: 80
+
+  DatabaseServer:
+    type: OS::Nova::Server
+    properties:
+      image: Ubuntu64-mysql
+      flavor: { get_param: instance_type }
+      security_groups:
+        - {get_resource: SecurityGroup}
+        - default
+      key_name: { get_param: key_name }
+      user_data:
+        str_replace:
+          template: |
+            #!/bin/bash
+
+            # The below script is partially from DevStack's stack.sh script
+            # Script should be run as root
+            MYSQL_HOST=localhost
+            MYSQL_USER=db_user
+            MYSQL_PASSWORD=db_rootpassword
+
+            # Make sure MySQL is fully running before trying to change the password
+            service mysql start
+            sleep 5
+
+
+            # Change default database password
+            mysqladmin -uroot password $MYSQL_PASSWORD
+
+            # while ``.my.cnf`` is not needed for OpenStack to function, it is useful
+            # as it allows you to access the mysql databases via ``mysql nova`` instead
+            # of having to specify the username/password each time.
+            if [[ ! -e $HOME/.my.cnf ]]; then
+                cat <<EOF >$HOME/.my.cnf
+            [client]
+            user=$MYSQL_USER
+            password=$MYSQL_PASSWORD
+            host=$MYSQL_HOST
+            EOF
+                chmod 0600 $HOME/.my.cnf
+            fi
+
+            MY_CONF=/etc/mysql/my.cnf
+            MYSQL=mysql
+
+            # Update the DB to give user MYSQL_USER full control of the all databases:
+            mysql -uroot -p$MYSQL_PASSWORD -h127.0.0.1 -e "GRANT ALL PRIVILEGES ON *.* TO '$MYSQL_USER'@'%' identified by '$MYSQL_PASSWORD';"
+
+            # Now update ``my.cnf`` for some local needs and restart the mysql service
+
+            # Change bind-address from localhost (127.0.0.1) to any (0.0.0.0)
+            sudo sed -i '/^bind-address/s/127.0.0.1/0.0.0.0/g' $MY_CONF
+
+            # Set default db type to InnoDB
+            if sudo grep -q "default-storage-engine" $MY_CONF; then
+                # Change it
+                sudo bash -c "source $TOP_DIR/functions; iniset $MY_CONF mysqld default-storage-engine InnoDB"
+            else
+                # Add it
+                sudo sed -i -e "/^\[mysqld\]/ a \
+            default-storage-engine = InnoDB" $MY_CONF
+            fi
+
+            service $MYSQL restart
+
+            cat << EOF | mysql -u root --password=db_rootpassword
+            CREATE DATABASE db_name;
+            GRANT ALL PRIVILEGES ON db_name.* TO "db_user"@"%"
+            IDENTIFIED BY "db_password";
+            FLUSH PRIVILEGES;
+            EXIT
+            EOF
+
+
+          params:
+            db_rootpassword: { get_param: db_root_password }
+            db_name: { get_param: db_name }
+            db_user: { get_param: db_username }
+            db_password: { get_param: db_password }
+
+  WebServer:
+    type: OS::Nova::Server
+    properties:
+      image: Ubuntu64-wp
+      flavor: { get_param: instance_type }
+      key_name: { get_param: key_name }
+      security_groups:
+        - {get_resource: SecurityGroup}
+        - default
+      user_data:
+        str_replace:
+          template: |
+            #!/bin/bash
+
+            rm -rf /var/www
+            ln -s /usr/share/wordpress /var/www
+            chown -R www-data /usr/share/wordpress
+
+            touch /etc/apache2/conf.d/wordpress
+            cat <<EOF > /etc/apache2/conf.d/wordpress
+            Alias /wordpress /usr/share/wordpress
+
+            <Directory /usr/share/wordpress>
+            ##  AllowOverride Options
+              AllowOverride All
+              <IfModule mod_authz_core.c>
+                # Apache 2.4
+                Require local
+                Require ip 10.10.10
+              </IfModule>
+              <IfModule !mod_authz_core.c>
+                # Apache 2.2
+                Order Deny,Allow
+                Deny from All
+                Allow from 127.0.0.1
+                Allow from ::1
+             </IfModule>
+            </Directory>
+
+
+            <Directory /usr/share/wordpress/wp-content/plugins/akismet>
+              <FilesMatch "\.(php|txt)$">
+                Order Deny,Allow
+                Deny from all
+              </FilesMatch>
+            </Directory>
+            EOF
+            sed -i "/Deny from All/d" /etc/apache2/conf.d/wordpress
+            sed -i "s/Require local/Require all granted/" /etc/apache2/conf.d/wordpress
+
+            rm /etc/wordpress/wp-config.php
+            wget http://core.svn.wordpress.org/trunk/wp-config-sample.php -P /etc/wordpress/
+            mv /etc/wordpress/wp-config-sample.php /etc/wordpress/wp-config.php
+            sed -i s/database_name_here/db_name/ /etc/wordpress/wp-config.php
+            sed -i s/username_here/db_user/      /etc/wordpress/wp-config.php
+            sed -i s/password_here/db_password/  /etc/wordpress/wp-config.php
+            sed -i s/localhost/db_ipaddr/        /etc/wordpress/wp-config.php
+
+            service apache2 restart
+          params:
+            db_rootpassword: { get_param: db_root_password }
+            db_name: { get_param: db_name }
+            db_user: { get_param: db_username }
+            db_password: { get_param: db_password }
+            db_ipaddr: { get_attr: [DatabaseServer, first_address] }
+
+outputs:
+  WebsiteURL:
+    description: URL for Wordpress wiki
+    value:
+      str_replace:
+        template: http://host
+        params:
+          host: { get_attr: [WebServer, first_address] }
+
