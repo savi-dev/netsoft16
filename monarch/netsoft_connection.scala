@@ -14,7 +14,7 @@ import org.json4s.jackson.JsonMethods._
   * Created by ericlin on 15-08-24.
   * Modified by Byungchul Park
   */
-object MultiLayerGraphGeneration {
+object VmConnectionGraph {
 
 
   def createGraph(hdfspaths:String, vmid:String) {
