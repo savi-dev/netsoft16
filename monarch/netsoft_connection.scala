@@ -19,7 +19,7 @@ object VmConnectionGraph {
 
   def createGraph(hdfspaths:String, vmid:String) {
     val sparkConf = new SparkConf()
-      .setAppName("MultiLayerGraphGeneration")
+      .setAppName("connection_"+vmid)
     val sc = new SparkContext(sparkConf)
     sc.addJar("/home/ubuntu/mysql-connector-java-5.1.36/mysql-connector-java-5.1.36-bin.jar")
 
