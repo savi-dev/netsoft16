@@ -196,7 +196,9 @@ resources:
 
 outputs:
   WebServ_IP:
-    description: Public IP address of Web server
+    description: IP address of Web server
     value: { get_attr: [ WebServer, first_address ] }
 
-
+  Firewall_IP:
+    description: IP address of the firewall server
+    value: { get_attr: [ Firewall, first_address ] }

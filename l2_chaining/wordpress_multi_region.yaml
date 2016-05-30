@@ -111,6 +111,11 @@ outputs:
         template: http://host
         params:
           host: { get_attr: [WebServerStack, outputs, WebServ_IP] }
+
   DatabaseIP:
     description: IP address of backend database
     value: { get_attr: [DBServerStack, outputs, DB_IP] }
+
+  FirewallIP:
+    description: IP address of the firewall server
+    value: { get_attr: [WebServerStack, outputs, Firewall_IP] }

@@ -1,20 +1,36 @@
 #!/bin/bash
 source /home/savitb/bin/functions
-if [ "$#" -ne 1 ]; then
+if [ "$#" -ne 2 ]; then
     echo "ERROR: Incorrect number of paramters"
-    echo "Usage: ./create_stack.sh <key_name>"
+    echo "Usage: ./create_stack.sh <key_name> <edge_region_name>"
     exit 0
 fi
+
+POSSIBLE_EDGES="EDGE-TR-1 EDGE-WT-1 EDGE-YK-1 EDGE-CT-1 EDGE-CG-1 EDGE-VC-1 EDGE-MG-1 EDGE-PT-1"
 
 NAME="$(whoami)"
 NAME=`echo ${NAME} | sed 's/\.//g'`
 KEY_NAME=$1
 
-#Where web server is located
-REGION1=$OS_REGION_NAME
+# Where web server is located
+REGION1=$2
 
-#Where DB server is located
+# Where DB server is located
 REGION2=CORE
+
+# Ensure specified region is valid
+MATCH=0
+for i in $POSSIBLE_EDGES; do
+    if [[ "${i}" == "${REGION1}" ]]; then
+        MATCH=1
+        break;
+    fi
+done
+
+if [[ $MATCH == 0 ]]; then
+    echo "ERROR: Unknown edge name provided"
+    exit 0
+fi
 
 # Fingerprint of public key
 if [[ ! -f ${HOME}/.ssh/id_rsa.pub ]]; then
@@ -22,10 +38,6 @@ if [[ ! -f ${HOME}/.ssh/id_rsa.pub ]]; then
     exit 0
 fi
 KEY_FINGERPRINT=`ssh-keygen -lf ${HOME}/.ssh/id_rsa.pub | awk '{print $2}'`
-
-if [ "$REGION1" == "$REGION2" ]; then
-    REGION2=EDGE-TR-1
-fi
 
 # For region 1:
 # If a key with the specified key-name already exists with a different fingerprint, delete it
