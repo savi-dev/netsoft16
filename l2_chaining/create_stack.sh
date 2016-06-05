@@ -6,7 +6,7 @@ if [ "$#" -ne 2 ]; then
     exit 0
 fi
 
-POSSIBLE_EDGES="EDGE-TR-1 EDGE-WT-1 EDGE-YK-1 EDGE-CT-1 EDGE-CG-1 EDGE-VC-1 EDGE-MG-1 EDGE-PT-1"
+POSSIBLE_EDGES="EDGE-WT-1 EDGE-YK-1 EDGE-CT-1 EDGE-VC-1"
 
 NAME="$(whoami)"
 NAME=`echo ${NAME} | sed 's/\.//g'`
@@ -73,10 +73,15 @@ fi
 green_desc_title "Deploying Heat stack based on template: wordpress_multi_region.yaml"
 green_desc_title "Heat stack will be named: ${NAME}"
 command_desc "heat stack-create $NAME -f wordpress_multi_region.yaml -P=\"key_name=$KEY_NAME;region1=$REGION1;region2=${REGION2}\""
-heat stack-create $NAME -f wordpress_multi_region.yaml -P="key_name=$KEY_NAME;region1=$REGION1;region2=$REGION2"
+OUTPUT=`heat stack-create $NAME -f wordpress_multi_region.yaml -P="key_name=$KEY_NAME;region1=$REGION1;region2=$REGION2" 2>&1`
+echo
 
-blue_desc_title "Deployed Heat stack \"$NAME\" with key \"$KEY_NAME\".
+echo "$OUTPUT"
+
+if [[ ! "$OUTPUT" =~ "ERROR" ]]; then
+    blue_desc_title "Deployed Heat stack \"$NAME\" with key \"$KEY_NAME\".
 The database server will be located on ${REGION2}.
 The web server will be located on ${REGION1}."
+fi
 
 
